@@ -1,37 +1,40 @@
 const mongoose = require('mongoose');
-const Question = require('./models/Question'); // عدل حسب مسار الموديل
-const fs = require('fs');
+const Question = require('./models/Question');
+const questionsData = require('./questions');
 const dotenv = require('dotenv');
 
 dotenv.config();
 
+// الاتصال بقاعدة البيانات
 mongoose.connect(process.env.MONGO_URI)
   .then(async () => {
-    console.log('MongoDB connected');
+    console.log('✅ MongoDB connected');
 
-    // قراءة الملف JSON
-    const questionsData = JSON.parse(fs.readFileSync('questions.json', 'utf-8'));
-
-    // التاريخ اليومي بصيغة YYYY-MM-DD
     const today = new Date().toISOString().slice(0, 10);
 
-    // أضف التاريخ تلقائياً لكل سؤال
-    const questionsWithDate = questionsData.map(q => ({
-      ...q,
-      date: today,
-    }));
+    // إضافة correctAnswerIndex قبل الإدخال
+    const questionsWithDate = questionsData.map(q => {
+      const index = q.options.indexOf(q.correct_answer);
+      if (index === -1) {
+        throw new Error(`❌ الإجابة الصحيحة للسؤال '${q.question}' غير موجودة في الخيارات.`);
+      }
+      return {
+        ...q,
+        correctAnswerIndex: index,
+        date: today
+      };
+    });
 
-    // احذف كل الأسئلة القديمة لو حابب (اختياري)
-    await Question.deleteMany({ date: today }); // تمسح أسئلة اليوم لو موجودة
+    // حذف الأسئلة القديمة لهذا اليوم (اختياري)
+    await Question.deleteMany({ date: today });
 
-    // إدخال البيانات في الداتابيس
+    // إضافة البيانات
     await Question.insertMany(questionsWithDate);
 
-    console.log('Questions seeded successfully');
+    console.log('✅ Questions seeded successfully');
     process.exit();
   })
   .catch(err => {
-    console.error(err);
+    console.error('❌ Error:', err);
     process.exit(1);
   });
- 
